@@ -1,0 +1,53 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+        
+    - name: Install dependencies
+      run: |
+        cd services/user-service && npm ci
+        cd ../task-service && npm ci
+        cd ../notification-service && npm ci
+        cd ../frontend-service && npm ci
+        
+    - name: Run tests
+      run: |
+        cd services/user-service && npm test
+        cd ../task-service && npm test
+        cd ../notification-service && npm test
+        cd ../frontend-service && npm test
+
+  build-and-deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Build Docker images
+      run: |
+        docker build -t user-service:${{ github.sha }} ./services/user-service
+        docker build -t task-service:${{ github.sha }} ./services/task-service
+        docker build -t notification-service:${{ github.sha }} ./services/notification-service
+        docker build -t frontend-service:${{ github.sha }} ./services/frontend-service
+        
+    - name: Deploy to local cluster
+      run: |
+        # Update image tags in k8s manifests
+        # Apply manifests to local cluster
+        kubectl apply -f k8s/
